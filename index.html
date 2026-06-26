@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>모던 날씨 앱</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap');
+        
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background-color: #f5f6f8;
+            color: #242424;
+        }
+
+        .fade-in {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* 스크롤바 숨기기 (모달용) */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center pt-8 px-4 sm:pt-16">
+
+    <!-- 상단 헤더 & 설정 버튼 -->
+    <div class="w-full max-w-md flex justify-between items-center mb-6 px-2">
+        <h1 class="text-2xl font-black text-[#03c75a] tracking-tight flex items-center gap-1.5">
+            <i data-lucide="cloud-sun" class="w-7 h-7 stroke-[2.5]"></i>
+            날씨검색
+        </h1>
+        <button id="settings-btn" class="p-2 text-gray-400 hover:text-gray-700 transition rounded-full hover:bg-gray-200/50" title="API 키 설정">
+            <i data-lucide="settings" class="w-6 h-6"></i>
+        </button>
+    </div>
+
+    <!-- 메인 콘텐츠 카드 -->
+    <div class="w-full max-w-md bg-white rounded-[20px] shadow-[0_2px_16px_rgba(0,0,0,0.04)] overflow-hidden border border-gray-100">
+        
+        <!-- 검색 섹션 -->
+        <div class="p-5 border-b border-gray-100/80">
+            <div class="relative flex items-center">
+                <input type="text" id="city-input" placeholder="도시 검색 (예: 서울, London)" 
+                    class="w-full pl-5 pr-12 py-3.5 rounded-full bg-[#f5f6f8] border border-transparent focus:border-[#03c75a] focus:bg-white focus:ring-4 focus:ring-[#03c75a]/10 outline-none transition text-[15px] font-medium placeholder-gray-400">
+                <button id="search-btn" class="absolute right-2 p-2.5 text-[#03c75a] hover:bg-[#03c75a]/10 rounded-full transition">
+                    <i data-lucide="search" class="w-5 h-5 stroke-[2.5]"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- 상태 및 결과 영역 -->
+        <div class="p-6 min-h-[300px] flex flex-col justify-center">
+            
+            <!-- 초기 안내 화면 -->
+            <div id="init-message" class="flex flex-col items-center text-center py-6 fade-in">
+                <div class="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
+                    <i data-lucide="search" class="w-8 h-8 text-gray-300"></i>
+                </div>
+                <p class="text-gray-500 text-[15px] font-medium mb-1">궁금한 지역의 날씨를 검색해보세요.</p>
+                <p class="text-xs text-gray-400">우측 상단 톱니바퀴를 눌러 API 키를 설정해주세요.</p>
+            </div>
+
+            <!-- 로딩 표시기 -->
+            <div id="loading" class="hidden flex-col items-center justify-center py-8">
+                <i data-lucide="loader-2" class="w-8 h-8 text-[#03c75a] animate-spin"></i>
+                <p class="text-gray-500 mt-3 text-sm font-medium">날씨 정보를 불러오는 중...</p>
+            </div>
+
+            <!-- 에러 메시지 -->
+            <div id="error-message" class="hidden bg-red-50 text-red-500 p-4 rounded-xl text-center text-[14px] font-medium fade-in border border-red-100 break-keep leading-relaxed">
+                <!-- 에러 내용이 여기에 표시됩니다 -->
+            </div>
+
+            <!-- 날씨 결과 카드 -->
+            <div id="weather-result" class="hidden flex-col items-center fade-in w-full">
+                <!-- 생략 없이 결과 표시 HTML 그대로 유지 -->
+                <div class="flex items-center gap-2 mb-1">
+                    <h2 id="city-name" class="text-[26px] font-bold text-gray-900 tracking-tight">서울</h2>
+                    <span id="country" class="px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded text-[11px] font-bold">KR</span>
+                </div>
+                <p id="description" class="text-gray-500 text-[15px] font-medium mb-6">맑음</p>
+                
+                <div class="flex items-center justify-center gap-6 mb-8 w-full">
+                    <img id="weather-icon" src="" alt="Weather icon" class="w-[88px] h-[88px]">
+                    <div class="flex items-start">
+                        <span id="temperature" class="text-[64px] font-light text-gray-900 leading-none tracking-tighter">24</span>
+                        <span class="text-3xl font-light text-gray-900 mt-2">°</span>
+                    </div>
+                </div>
+
+                <!-- 상세 정보 그리드 -->
+                <div class="grid grid-cols-3 gap-0 w-full border-t border-gray-100 pt-6 mt-2">
+                    <div class="flex flex-col items-center justify-center">
+                        <span class="text-[12px] text-gray-400 font-medium mb-1.5">체감</span>
+                        <span id="feels-like" class="text-[15px] font-bold text-gray-800">-°</span>
+                    </div>
+                    <div class="flex flex-col items-center justify-center border-l border-r border-gray-100">
+                        <span class="text-[12px] text-gray-400 font-medium mb-1.5">습도</span>
+                        <span id="humidity" class="text-[15px] font-bold text-gray-800">-%</span>
+                    </div>
+                    <div class="flex flex-col items-center justify-center">
+                        <span class="text-[12px] text-gray-400 font-medium mb-1.5">바람</span>
+                        <span id="wind-speed" class="text-[15px] font-bold text-gray-800">-m/s</span>
+                    </div>
+                </div>
+
+                <!-- 추가 상세 정보 리스트 -->
+                <div class="w-full border-t border-gray-100 pt-5 mt-5 space-y-4">
+                    <div class="flex justify-between items-center px-2">
+                        <span class="text-[13px] text-gray-500 flex items-center gap-2"><i data-lucide="thermometer" class="w-4 h-4 text-gray-400"></i>최고 / 최저 온도</span>
+                        <span class="text-[14px] font-bold text-gray-800" id="high-low-temp">-</span>
+                    </div>
+                    <div class="flex justify-between items-center px-2">
+                        <span class="text-[13px] text-gray-500 flex items-center gap-2"><i data-lucide="gauge" class="w-4 h-4 text-gray-400"></i>기압</span>
+                        <span class="text-[14px] font-bold text-gray-800" id="pressure">-</span>
+                    </div>
+                    <div class="flex justify-between items-center px-2">
+                        <span class="text-[13px] text-gray-500 flex items-center gap-2"><i data-lucide="eye" class="w-4 h-4 text-gray-400"></i>가시거리</span>
+                        <span class="text-[14px] font-bold text-gray-800" id="visibility">-</span>
+                    </div>
+                    <div class="flex justify-between items-center px-2">
+                        <span class="text-[13px] text-gray-500 flex items-center gap-2"><i data-lucide="cloud" class="w-4 h-4 text-gray-400"></i>구름의 양</span>
+                        <span class="text-[14px] font-bold text-gray-800" id="clouds">-</span>
+                    </div>
+                    <div class="flex justify-between items-center px-2">
+                        <span class="text-[13px] text-gray-500 flex items-center gap-2"><i data-lucide="sunrise" class="w-4 h-4 text-gray-400"></i>일출 / 일몰</span>
+                        <span class="text-[14px] font-bold text-gray-800" id="sunrise-sunset">-</span>
+                    </div>
+                    <div id="precip-container" class="hidden justify-between items-center px-2">
+                        <span id="precip-label" class="text-[13px] text-blue-500 flex items-center gap-2"><i data-lucide="cloud-rain" class="w-4 h-4"></i>강수량</span>
+                        <span class="text-[14px] font-bold text-blue-600" id="precip-value">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 설정 모달 (API 키 입력) -->
+    <div id="settings-modal" class="fixed inset-0 bg-black/30 backdrop-blur-[2px] hidden items-center justify-center z-50 opacity-0 transition-opacity duration-200">
+        <div id="modal-content" class="bg-white rounded-[20px] w-[90%] max-w-[340px] p-6 shadow-2xl transform scale-95 transition-transform duration-200">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-[17px] font-bold text-gray-900">설정</h3>
+                <button id="close-modal-btn" class="text-gray-400 hover:text-gray-800 transition p-1">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            
+            <div class="mb-2">
+                <label class="block text-[13px] font-bold text-gray-700 mb-2" for="api-key">
+                    OpenWeatherMap API 키
+                </label>
+                <input type="password" id="api-key" placeholder="32자리 API 키 입력" 
+                    class="w-full px-4 py-3 rounded-xl bg-[#f5f6f8] border border-gray-200 focus:border-[#03c75a] focus:bg-white focus:ring-4 focus:ring-[#03c75a]/10 outline-none transition text-[14px]">
+                <p id="key-length-warning" class="text-[11px] text-red-500 mt-1 hidden">키는 정확히 32자리여야 합니다. 빈칸을 지워주세요.</p>
+            </div>
+            
+            <div class="h-6 flex items-center mb-4">
+                <p id="key-status" class="text-[12px] font-medium text-[#03c75a] hidden">
+                    <i data-lucide="check" class="w-3 h-3 inline mr-1"></i>API 키가 저장되었습니다.
+                </p>
+            </div>
+            
+            <button id="save-key-btn" class="w-full bg-[#03c75a] hover:bg-[#02b350] active:bg-[#029b45] text-white py-3.5 rounded-xl text-[15px] font-bold transition shadow-sm">
+                저장하기
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Lucide 아이콘 초기화
+        lucide.createIcons();
+
+        // DOM 요소
+        const apiKeyInput = document.getElementById('api-key');
+        const saveKeyBtn = document.getElementById('save-key-btn');
+        const keyStatus = document.getElementById('key-status');
+        const keyLengthWarning = document.getElementById('key-length-warning');
+        const cityInput = document.getElementById('city-input');
+        const searchBtn = document.getElementById('search-btn');
+        
+        const settingsBtn = document.getElementById('settings-btn');
+        const closeModalBtn = document.getElementById('close-modal-btn');
+        const settingsModal = document.getElementById('settings-modal');
+        const modalContent = document.getElementById('modal-content');
+        
+        const initSection = document.getElementById('init-message');
+        const loadingSection = document.getElementById('loading');
+        const resultSection = document.getElementById('weather-result');
+        const errorSection = document.getElementById('error-message');
+
+        // 초기 로드 시 저장된 키 불러오기
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedKey = localStorage.getItem('weatherApiKey');
+            if (savedKey) {
+                apiKeyInput.value = savedKey;
+            }
+        });
+
+        // 모달 제어
+        function openModal() {
+            settingsModal.classList.remove('hidden');
+            settingsModal.classList.add('flex');
+            requestAnimationFrame(() => {
+                settingsModal.classList.remove('opacity-0');
+                modalContent.classList.remove('scale-95');
+            });
+            keyStatus.classList.add('hidden');
+            keyLengthWarning.classList.add('hidden');
+        }
+
+        function closeModal() {
+            settingsModal.classList.add('opacity-0');
+            modalContent.classList.add('scale-95');
+            setTimeout(() => {
+                settingsModal.classList.add('hidden');
+                settingsModal.classList.remove('flex');
+            }, 200);
+        }
+
+        settingsBtn.addEventListener('click', openModal);
+        closeModalBtn.addEventListener('click', closeModal);
+        settingsModal.addEventListener('click', (e) => {
+            if (e.target === settingsModal) closeModal();
+        });
+
+        // 키 입력 시 길이 실시간 체크 (공백 실수 방지)
+        apiKeyInput.addEventListener('input', (e) => {
+            const val = e.target.value;
+            if (val.length > 0 && val.length !== 32) {
+                keyLengthWarning.classList.remove('hidden');
+            } else {
+                keyLengthWarning.classList.add('hidden');
+            }
+        });
+
+        // API 키 저장 (저장 시 앞뒤 공백 완전 제거)
+        saveKeyBtn.addEventListener('click', () => {
+            const rawKey = apiKeyInput.value;
+            const cleanKey = rawKey.trim(); // 앞뒤 빈칸 무조건 삭제
+            
+            apiKeyInput.value = cleanKey; // 삭제된 값을 입력창에도 다시 보여줌
+
+            if (cleanKey) {
+                if (cleanKey.length !== 32) {
+                    keyLengthWarning.classList.remove('hidden');
+                    return; // 32자리가 아니면 아예 저장을 막음
+                }
+                
+                localStorage.setItem('weatherApiKey', cleanKey);
+                keyLengthWarning.classList.add('hidden');
+                keyStatus.innerHTML = '<i data-lucide="check" class="w-3 h-3 inline mr-1"></i>정상적으로 저장되었습니다.';
+                keyStatus.className = 'text-[12px] font-medium text-[#03c75a] flex items-center';
+                lucide.createIcons();
+                setTimeout(() => closeModal(), 1000);
+            } else {
+                localStorage.removeItem('weatherApiKey');
+                keyStatus.textContent = 'API 키가 삭제되었습니다.';
+                keyStatus.className = 'text-[12px] font-medium text-gray-500';
+                keyStatus.classList.remove('hidden');
+            }
+        });
+
+        // 검색 실행
+        searchBtn.addEventListener('click', performSearch);
+        cityInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') performSearch();
+        });
+
+        function performSearch() {
+            const city = cityInput.value.trim();
+            
+            // 반드시 로컬 스토리지에 확실하게 저장된 키를 가져옴
+            const apiKey = localStorage.getItem('weatherApiKey');
+
+            if (!apiKey) {
+                showError('우측 상단 톱니바퀴를 눌러 API 키를 먼저 저장해주세요.');
+                openModal();
+                return;
+            }
+
+            if (apiKey.length !== 32) {
+                showError('저장된 API 키의 형식이 잘못되었습니다.<br>설정에서 기존 키를 지우고 다시 정확히 붙여넣어주세요.');
+                openModal();
+                return;
+            }
+
+            if (!city) {
+                showError('검색할 도시(예: 서울, 제주)를 입력해주세요.');
+                return;
+            }
+
+            fetchWeather(city, apiKey);
+        }
+
+        async function fetchWeather(city, apiKey) {
+            initSection.classList.add('hidden');
+            errorSection.classList.add('hidden');
+            resultSection.classList.add('hidden');
+            resultSection.classList.remove('flex');
+            
+            loadingSection.classList.remove('hidden');
+            loadingSection.classList.add('flex');
+
+            try {
+                // 1. 직접 Weather API부터 호출 (가장 단순하고 확실한 방법)
+                const directUrl = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${apiKey}&units=metric&lang=kr`;
+                const directResponse = await fetch(directUrl);
+                const directData = await directResponse.json();
+
+                // 만약 서버에서 에러를 뱉었다면?
+                if (!directResponse.ok) {
+                    
+                    // 401: API 키 거절
+                    if (directData.cod == 401) {
+                        throw new Error(`
+                            <strong class="text-red-600 block mb-1">[API 키 거절됨]</strong>
+                            키가 유효하지 않거나 대기 중입니다.<br>
+                            <span class="text-[12px] text-gray-500 block mt-2 bg-white/50 p-2 rounded">
+                                서버 실제 응답메시지:<br>
+                                <b>"${directData.message}"</b>
+                            </span>
+                        `);
+                    } 
+                    // 404: 도시를 못 찾음 -> Geocoding API로 재시도 (영어로 쳐야만 나오는 곳들 방어)
+                    else if (directData.cod == 404) {
+                        
+                        const geoUrl = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(city)}&limit=1&appid=${apiKey}`;
+                        const geoResponse = await fetch(geoUrl);
+                        const geoData = await geoResponse.json();
+
+                        if (!geoResponse.ok || !geoData || geoData.length === 0) {
+                             throw new Error(`
+                                <strong class="text-red-600 block mb-1">[지역 검색 실패]</strong>
+                                '${city}' 지역을 찾을 수 없습니다.<br>
+                                <span class="text-[12px] text-gray-500 block mt-1">
+                                    영문(예: London, Tokyo)으로 검색해 보세요.
+                                </span>
+                            `);
+                        }
+
+                        const { lat, lon, name, local_names } = geoData[0];
+                        const finalDisplayName = (local_names && local_names.ko) ? local_names.ko : name;
+
+                        const coordUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric&lang=kr`;
+                        const coordResponse = await fetch(coordUrl);
+                        const coordData = await coordResponse.json();
+
+                        if (!coordResponse.ok) {
+                            throw new Error(`서버 응답 에러: ${coordData.message}`);
+                        }
+                        
+                        coordData.displayName = finalDisplayName;
+                        displayWeather(coordData);
+                        return;
+
+                    } else {
+                        // 기타 알 수 없는 에러
+                        throw new Error(`
+                            <strong class="text-red-600 block mb-1">[알 수 없는 오류]</strong>
+                            서버에서 데이터를 주지 않습니다.<br>
+                            <span class="text-[12px] text-gray-500 block mt-2 bg-white/50 p-2 rounded">
+                                서버 상태 코드: <b>${directData.cod}</b><br>
+                                서버 메시지: <b>${directData.message}</b>
+                            </span>
+                        `);
+                    }
+                }
+
+                // 성공적으로 데이터를 가져온 경우
+                directData.displayName = directData.name;
+                displayWeather(directData);
+
+            } catch (error) {
+                // Fetch 함수 자체가 터졌을 때 (인터넷 끊김 등)
+                let errorMsg = error.message;
+                if (errorMsg.includes('Failed to fetch') || errorMsg.includes('NetworkError')) {
+                    errorMsg = `
+                        <strong class="text-red-600 block mb-1">[네트워크 접속 불가]</strong>
+                        서버에 아예 연결하지 못했습니다.<br>
+                        인터넷 상태나 브라우저 광고 차단기를 확인해주세요.
+                    `;
+                }
+                showError(errorMsg);
+            } finally {
+                loadingSection.classList.add('hidden');
+                loadingSection.classList.remove('flex');
+            }
+        }
+
+        // 시간 포맷 (변경 없음)
+        function formatTime(timestamp, timezoneOffset) {
+            if (!timestamp) return '-';
+            const date = new Date((timestamp + timezoneOffset) * 1000);
+            const hours = date.getUTCHours().toString().padStart(2, '0');
+            const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+            return `${hours}:${minutes}`;
+        }
+
+        // 화면 그리기 로직 (변경 없음)
+        function displayWeather(data) {
+            document.getElementById('city-name').textContent = data.displayName || data.name || '알 수 없음';
+            document.getElementById('country').textContent = (data.sys && data.sys.country) ? data.sys.country : '';
+            
+            const temp = data.main && data.main.temp ? Math.round(data.main.temp) : '-';
+            document.getElementById('temperature').textContent = temp;
+            
+            document.getElementById('description').textContent = (data.weather && data.weather[0]) ? data.weather[0].description : '정보 없음';
+            
+            const iconCode = (data.weather && data.weather[0]) ? data.weather[0].icon : '01d';
+            document.getElementById('weather-icon').src = `https://openweathermap.org/img/wn/${iconCode}@4x.png`;
+
+            document.getElementById('feels-like').textContent = data.main && data.main.feels_like !== undefined ? `${Math.round(data.main.feels_like)}°` : '-°';
+            document.getElementById('humidity').textContent = data.main && data.main.humidity !== undefined ? `${data.main.humidity}%` : '-%';
+            document.getElementById('wind-speed').textContent = data.wind && data.wind.speed !== undefined ? `${data.wind.speed.toFixed(1)}m/s` : '-m/s';
+
+            const tempMax = data.main && data.main.temp_max !== undefined ? Math.round(data.main.temp_max) : '-';
+            const tempMin = data.main && data.main.temp_min !== undefined ? Math.round(data.main.temp_min) : '-';
+            document.getElementById('high-low-temp').textContent = `${tempMax}° / ${tempMin}°`;
+            
+            document.getElementById('pressure').textContent = data.main && data.main.pressure !== undefined ? `${data.main.pressure} hPa` : '정보 없음';
+            
+            const visibilityStr = data.visibility !== undefined 
+                ? (data.visibility >= 1000 ? `${(data.visibility / 1000).toFixed(1)} km` : `${data.visibility} m`) 
+                : '정보 없음';
+            document.getElementById('visibility').textContent = visibilityStr;
+            
+            document.getElementById('clouds').textContent = data.clouds && data.clouds.all !== undefined ? `${data.clouds.all}%` : '정보 없음';
+            
+            const timezone = data.timezone || 0;
+            const sunriseStr = (data.sys && data.sys.sunrise) ? formatTime(data.sys.sunrise, timezone) : '-';
+            const sunsetStr = (data.sys && data.sys.sunset) ? formatTime(data.sys.sunset, timezone) : '-';
+            document.getElementById('sunrise-sunset').textContent = `${sunriseStr} / ${sunsetStr}`;
+            
+            const precipContainer = document.getElementById('precip-container');
+            const precipLabel = document.getElementById('precip-label');
+            const precipValue = document.getElementById('precip-value');
+            
+            precipContainer.classList.add('hidden');
+            precipContainer.classList.remove('flex');
+
+            if (data.rain) {
+                const rainVol = data.rain['1h'] || data.rain['3h'];
+                const timeLabel = data.rain['1h'] ? '1시간' : '3시간';
+                if (rainVol !== undefined) {
+                    precipLabel.innerHTML = `<i data-lucide="cloud-rain" class="w-4 h-4"></i>강수량 (${timeLabel})`;
+                    precipValue.textContent = `${rainVol} mm`;
+                    precipContainer.classList.remove('hidden');
+                    precipContainer.classList.add('flex');
+                }
+            } else if (data.snow) {
+                const snowVol = data.snow['1h'] || data.snow['3h'];
+                const timeLabel = data.snow['1h'] ? '1시간' : '3시간';
+                if (snowVol !== undefined) {
+                    precipLabel.innerHTML = `<i data-lucide="cloud-snow" class="w-4 h-4"></i>적설량 (${timeLabel})`;
+                    precipValue.textContent = `${snowVol} mm`;
+                    precipContainer.classList.remove('hidden');
+                    precipContainer.classList.add('flex');
+                }
+            }
+
+            lucide.createIcons();
+            resultSection.classList.remove('hidden');
+            resultSection.classList.add('flex');
+        }
+
+        function showError(message) {
+            errorSection.innerHTML = `<i data-lucide="alert-circle" class="w-5 h-5 inline-block mb-2 text-red-500"></i><br>${message}`;
+            lucide.createIcons();
+            errorSection.classList.remove('hidden');
+            resultSection.classList.add('hidden');
+            resultSection.classList.remove('flex');
+        }
+    </script>
+</body>
+</html>
